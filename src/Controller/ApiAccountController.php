@@ -13,6 +13,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('api/')]
@@ -26,8 +27,17 @@ class ApiAccountController extends ApiAbstractController
     private string $resource = User::class;
 
     #[Route('account', name: 'api_add_account', methods: ['POST'])]
-    public function addAccount(Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+    public function addAccount($credentials, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
     {
+        dd($credentials);
+
+        try {
+            $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
+        } catch (AccessDeniedException $e) {
+            return $this->response(['message' => $e->getMessage()], 401);
+        }
+
+        dd('WORKING');
         try {
             $account = $this->deserializeRequest($request, $this->resource);
         } catch (Exception $e) {

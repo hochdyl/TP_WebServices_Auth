@@ -45,6 +45,8 @@ class TokenRepository extends ServiceEntityRepository
         }
     }
 
+    public function getUserToken
+
     // /**
     //  * @return Token[] Returns an array of Token objects
     //  */

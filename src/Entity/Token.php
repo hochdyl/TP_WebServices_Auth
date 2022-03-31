@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Repository\TokenRepository;
+use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: TokenRepository::class)]
@@ -25,6 +26,19 @@ class Token
     #[ORM\Column(type: 'datetime_immutable')]
     private $refreshTokenExpiresAt;
 
+    #[ORM\ManyToOne(targetEntity: User::class, inversedBy: 'tokens')]
+    #[ORM\JoinColumn(nullable: false)]
+    private $user;
+
+    public function __construct(User $user)
+    {
+        $this->user = $user;
+        $this->accessToken = bin2hex(random_bytes(64));
+        $this->accessTokenExpiresAt = new \DateTime('+1 hour');
+        $this->refreshToken = bin2hex(random_bytes(64));
+        $this->refreshTokenExpiresAt = new \DateTime('+2 hours');
+    }
+
     public function getId(): ?int
     {
         return $this->id;
@@ -35,23 +49,9 @@ class Token
         return $this->accessToken;
     }
 
-    public function setAccessToken(string $accessToken): self
-    {
-        $this->accessToken = $accessToken;
-
-        return $this;
-    }
-
-    public function getAccessTokenExpiresAt(): ?\DateTimeImmutable
+    public function getAccessTokenExpiresAt(): ?DateTimeImmutable
     {
         return $this->accessTokenExpiresAt;
-    }
-
-    public function setAccessTokenExpiresAt(\DateTimeImmutable $accessTokenExpiresAt): self
-    {
-        $this->accessTokenExpiresAt = $accessTokenExpiresAt;
-
-        return $this;
     }
 
     public function getRefreshToken(): ?string
@@ -59,21 +59,26 @@ class Token
         return $this->refreshToken;
     }
 
-    public function setRefreshToken(string $refreshToken): self
-    {
-        $this->refreshToken = $refreshToken;
-
-        return $this;
-    }
-
-    public function getRefreshTokenExpiresAt(): ?\DateTimeImmutable
+    public function getRefreshTokenExpiresAt(): ?DateTimeImmutable
     {
         return $this->refreshTokenExpiresAt;
     }
 
-    public function setRefreshTokenExpiresAt(\DateTimeImmutable $refreshTokenExpiresAt): self
+    public function setRefreshTokenExpiresAt(DateTimeImmutable $refreshTokenExpiresAt): self
     {
         $this->refreshTokenExpiresAt = $refreshTokenExpiresAt;
+
+        return $this;
+    }
+
+    public function getUser(): ?User
+    {
+        return $this->user;
+    }
+
+    public function setUser(?User $user): self
+    {
+        $this->user = $user;
 
         return $this;
     }

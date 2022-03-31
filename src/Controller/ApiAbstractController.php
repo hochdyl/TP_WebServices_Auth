@@ -12,20 +12,6 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 abstract class ApiAbstractController extends AbstractController
 {
     /**
-     * Request output format.
-     *
-     * @var string
-     */
-    protected string $outputFormat;
-
-    /**
-     * List of supported formats.
-     *
-     * @var array
-     */
-    private array $supportedFormats = ['json', 'xml'];
-
-    /**
      * Data serializer.
      *
      * @var SerializerInterface
@@ -40,11 +26,15 @@ abstract class ApiAbstractController extends AbstractController
      */
     public function __construct(RequestStack $request, SerializerInterface $serializer)
     {
+        $this->serializer = $serializer;
+
         $request = $request->getCurrentRequest();
 
-        $outputFormat = strtolower($request->headers->get('X-Output-Format', 'json'));
-        $this->outputFormat = in_array($outputFormat, $this->supportedFormats) ? $outputFormat : 'json';
-        $this->serializer = $serializer;
+        $apiToken = $request->headers->get('Authorization');
+        if ($apiToken === null) {
+            return new Response('test', 401, ['Content-Type' => 'application/json']);
+            $this->response(['message' => 'No API token provided.'], 401);
+        }
     }
 
     /**
