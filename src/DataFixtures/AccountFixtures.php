@@ -4,13 +4,20 @@ namespace App\DataFixtures;
 
 use App\Entity\Token;
 use App\Entity\User;
-use DateTime;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Exception;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class AccountFixtures extends Fixture
 {
+    private UserPasswordHasherInterface $hasher;
+
+    public function __construct(UserPasswordHasherInterface $hasher)
+    {
+        $this->hasher = $hasher;
+    }
+
     /**
      * @throws Exception
      */
@@ -20,7 +27,7 @@ class AccountFixtures extends Fixture
         for ($i = 0; $i <= 2; $i++) {
             $user = new User();
             $user->setLogin('user'.$i);
-            $user->setPassword('pass'.$i);
+            $user->setPassword($this->hasher->hashPassword($user, 'pass'.$i));
 
             $token = new Token();
             $user->setToken($token);
@@ -32,7 +39,7 @@ class AccountFixtures extends Fixture
         // Admin account
         $user = new User();
         $user->setLogin('admin');
-        $user->setPassword('pass');
+        $user->setPassword($this->hasher->hashPassword($user, 'pass'));
         $user->setRoles(['ROLE_ADMIN']);
 
         $token = new Token();

@@ -55,6 +55,7 @@ abstract class ApiAbstractController extends AbstractController
      */
     protected function response(object|array|null $data, int $status, array $groups = null): Response
     {
+        // Default groups aim on 'public'.
         if (!$groups) {
             $groups[] = 'public';
         }
@@ -64,7 +65,7 @@ abstract class ApiAbstractController extends AbstractController
     }
 
     /**
-     * Handle a request content.
+     * Deserialize request content in json.
      *
      * @throws Exception
      */
@@ -91,7 +92,7 @@ abstract class ApiAbstractController extends AbstractController
     }
 
     /**
-     * Get account via 'me' alias or its id.
+     * Find account with id parameter or 'me' alias.
      *
      * @param string|int $parameter The parameter
      * @return User
@@ -110,26 +111,26 @@ abstract class ApiAbstractController extends AbstractController
             $token = $this->cleanHeaderToken($this->request->headers->get('Authorization'));
             $token = $this->em->getRepository(Token::class)->findOneBy(['accessToken' => $token])?:
                 throw new EntityNotFoundException('Unknown authorization token.');
-            $user = $token->getUser();
+            $account = $token->getUser();
         } else {
-            $user = $this->em->getRepository(User::class)->find($parameter) ?:
+            $account = $this->em->getRepository(User::class)->find($parameter) ?:
                 throw new EntityNotFoundException('The resource you requested could not be found.');
         }
 
         $isAdmin = $this->isAuthenticatedAdmin();
 
         $authIdentifier = $this->getUser()->getUserIdentifier();
-        $userIdentifier = $user->getUserIdentifier();
+        $accountIdentifier = $account->getUserIdentifier();
 
-        if (!$isAdmin && $authIdentifier !== $userIdentifier) {
+        if (!$isAdmin && $authIdentifier !== $accountIdentifier) {
             throw new AccessDeniedException();
         }
 
-        return $user;
+        return $account;
     }
 
     /**
-     * Is authenticated user admin.
+     * Is authenticated account an admin.
      *
      * @return bool
      */
@@ -164,7 +165,7 @@ abstract class ApiAbstractController extends AbstractController
     }
 
     /**
-     * Verify if the user didn't pass forbidden attributes to update.
+     * Verify if request content don't update forbidden attributes.
      *
      * @param array $payload The payload array
      * @return bool

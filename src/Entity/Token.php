@@ -4,9 +4,7 @@ namespace App\Entity;
 
 use App\Repository\TokenRepository;
 use DateTime;
-use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
-use Exception;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: TokenRepository::class)]
@@ -19,11 +17,11 @@ class Token
     private $id;
 
     #[ORM\Column(type: 'string', length: 255)]
-    #[Groups(['public'])]
+    #[Groups(['public', 'accessToken'])]
     private $accessToken;
 
     #[ORM\Column(type: 'datetime')]
-    #[Groups(['public'])]
+    #[Groups(['public', 'accessToken'])]
     private $accessTokenExpiresAt;
 
     #[ORM\Column(type: 'string', length: 255)]
