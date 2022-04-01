@@ -2,29 +2,21 @@
 
 namespace App\Controller;
 
+use App\Entity\Token;
+use App\Entity\User;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityNotFoundException;
 use Exception;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Serializer\Exception\NotEncodableValueException;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
 abstract class ApiAbstractController extends AbstractController
 {
-    /**
-     * Request output format.
-     *
-     * @var string
-     */
-    protected string $outputFormat;
-
-    /**
-     * List of supported formats.
-     *
-     * @var array
-     */
-    private array $supportedFormats = ['json', 'xml'];
-
     /**
      * Data serializer.
      *
@@ -33,30 +25,37 @@ abstract class ApiAbstractController extends AbstractController
     protected SerializerInterface $serializer;
 
     /**
-     * Handle input and output in supported formats.
+     * Request.
      *
-     * @param RequestStack $request
-     * @param SerializerInterface $serializer
+     * @var Request $request
      */
-    public function __construct(RequestStack $request, SerializerInterface $serializer)
-    {
-        $request = $request->getCurrentRequest();
+    protected Request $request;
 
-        $outputFormat = strtolower($request->headers->get('X-Output-Format', 'json'));
-        $this->outputFormat = in_array($outputFormat, $this->supportedFormats) ? $outputFormat : 'json';
+    /**
+     * Entity manager.
+     *
+     * @var EntityManagerInterface $em
+     */
+    protected EntityManagerInterface $em;
+
+    public function __construct(SerializerInterface $serializer, EntityManagerInterface $em, RequestStack $request)
+    {
         $this->serializer = $serializer;
+        $this->request = $request->getCurrentRequest();
+        $this->em = $em;
     }
 
     /**
      * Return a response in json.
      *
-     * @param object|array|null $data The data array.
-     * @param int $status The response status.
-     * @param array|null $groups Entity groups.
+     * @param object|array|null $data The data array
+     * @param int $status The response status
+     * @param array|null $groups Entity groups
      * @return Response
      */
     protected function response(object|array|null $data, int $status, array $groups = null): Response
     {
+        // Default groups aim on 'public'.
         if (!$groups) {
             $groups[] = 'public';
         }
@@ -66,7 +65,7 @@ abstract class ApiAbstractController extends AbstractController
     }
 
     /**
-     * Handle a request content.
+     * Deserialize request content in json.
      *
      * @throws Exception
      */
@@ -74,10 +73,117 @@ abstract class ApiAbstractController extends AbstractController
     {
         try {
             $data = $this->serializer->deserialize($request->getContent(), $resource, 'json');
-        } catch (NotEncodableValueException $e) {
-            return throw new Exception('Data is wrongly formatted in json.');
+        } catch (NotEncodableValueException) {
+            return throw new Exception('Request body is not a valid json.');
         }
 
         return $data;
+    }
+
+    /**
+     * Remove the 'Bearer' prefix in 'Authorization' header.
+     *
+     * @param string $header The 'Authorization' header
+     * @return string
+     */
+    protected function cleanHeaderToken(string $header): string
+    {
+        return substr($header, strlen('Bearer '));
+    }
+
+    /**
+     * Find account with id parameter or 'me' alias.
+     *
+     * @param string|int $parameter The parameter
+     * @return User
+     * @throws EntityNotFoundException
+     * @throws AccessDeniedException
+     */
+    protected function getAccountByParameter(string|int $parameter): User
+    {
+        try {
+            $this->denyAccessUnlessGranted('ROLE_USER');
+        } catch (AccessDeniedException $e) {
+            throw new AccessDeniedException($e->getMessage());
+        }
+
+        if ($parameter === 'me') {
+            $token = $this->cleanHeaderToken($this->request->headers->get('Authorization'));
+            $token = $this->em->getRepository(Token::class)->findOneBy(['accessToken' => $token])?:
+                throw new EntityNotFoundException('Unknown authorization token.');
+            $account = $token->getUser();
+        } else {
+            $account = $this->em->getRepository(User::class)->find($parameter) ?:
+                throw new EntityNotFoundException('The resource you requested could not be found.');
+        }
+
+        $isAdmin = $this->isAuthenticatedAdmin();
+
+        $authIdentifier = $this->getUser()->getUserIdentifier();
+        $accountIdentifier = $account->getUserIdentifier();
+
+        if (!$isAdmin && $authIdentifier !== $accountIdentifier) {
+            throw new AccessDeniedException();
+        }
+
+        return $account;
+    }
+
+    /**
+     * Is authenticated account an admin.
+     *
+     * @return bool
+     */
+    protected function isAuthenticatedAdmin(): bool
+    {
+        return in_array('ROLE_ADMIN', $this->getUser()->getRoles());
+    }
+
+    /**
+     * Update an entity from keys passed to the data array.
+     *
+     * @param object $entity The entity to update
+     * @param array $data Associated array like "property" => "value"
+     * @return object
+     * @throws Exception
+     */
+    public function update(object $entity, array $data): object
+    {
+        foreach ($data as $key => $value) {
+            $method = 'set'.ucfirst($key);
+            if (method_exists($entity, $method)) {
+                try {
+                    $entity->$method($value);
+                } catch (Exception) {
+                    throw new Exception('Cannot update "' . $key . '" with "' . $value . '"');
+                }
+            } else {
+                throw new Exception('Cannot update "' . $key . '", unknown property.');
+            }
+        }
+        return $entity;
+    }
+
+    /**
+     * Verify if request content don't update forbidden attributes.
+     *
+     * @param array $payload The payload array
+     * @return bool
+     * @throws Exception
+     */
+    protected function validateAccountPayload(array $payload): bool
+    {
+        $forbiddenValues = ['createdAt', 'updatedAt', 'token'];
+        if (!$this->isAuthenticatedAdmin()) {
+            $forbiddenValues[] = ['roles'];
+        }
+
+        foreach ($payload as $attribute => $value) {
+            if (in_array($attribute, $forbiddenValues)) {
+                throw new Exception('Updating '.$attribute.' is forbidden.');
+            }
+        }
+
+        return true;
     }
 }

@@ -3,26 +3,64 @@
 namespace App\Entity;
 
 use App\Repository\UserRepository;
+use DateTime;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
+#[UniqueEntity(fields: ['login'], message: 'This login already exist.')]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
+    #[Groups(['public'])]
     private $id;
 
     #[ORM\Column(type: 'string', length: 180, unique: true)]
+    #[Assert\NotBlank(message: 'Login cannot be empty.')]
+    #[Groups(['public'])]
     private $login;
 
     #[ORM\Column(type: 'json')]
+    #[Groups(['public'])]
     private $roles = [];
 
     #[ORM\Column(type: 'string')]
+    #[Assert\NotBlank(message: 'Login cannot be empty.')]
     private $password;
+
+    #[ORM\Column(type: 'string', length: 255)]
+    #[Assert\Choice(choices: ['open', 'close'], message: 'Choose a valid status.')]
+    #[Assert\NotNull(message: 'A status is required.')]
+    private $status;
+
+    #[ORM\Column(type: 'datetime')]
+    #[Assert\NotBlank(message: 'Created at date cannot be empty.')]
+    #[Groups(['public'])]
+    private $createdAt;
+
+    #[ORM\Column(type: 'datetime')]
+    #[Assert\NotBlank(message: 'Updated at date cannot be empty.')]
+    #[Groups(['public'])]
+    private $updatedAt;
+
+    #[ORM\OneToOne(inversedBy: 'user', targetEntity: Token::class, cascade: ['persist', 'remove'])]
+    #[ORM\JoinColumn(nullable: false)]
+    #[Assert\NotNull(message: 'A token is required.')]
+    private $token;
+
+    public function __construct()
+    {
+        $this->roles = ['ROLE_USER'];
+        $this->status = "open";
+        $this->createdAt = new DateTime();
+        $this->updatedAt = new DateTime();
+    }
 
     public function getId(): ?int
     {
@@ -92,5 +130,46 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         // If you store any temporary, sensitive data on the user, clear it here
         // $this->plainPassword = null;
+    }
+
+    public function getStatus(): ?string
+    {
+        return $this->status;
+    }
+
+    public function setStatus(string $status): self
+    {
+        $this->status = $status;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?DateTime
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?DateTime
+    {
+        return $this->updatedAt;
+    }
+
+    public function setUpdatedAt(DateTime $updatedAt): self
+    {
+        $this->updatedAt = $updatedAt;
+
+        return $this;
+    }
+
+    public function getToken(): ?Token
+    {
+        return $this->token;
+    }
+
+    public function setToken(Token $token): self
+    {
+        $this->token = $token;
+
+        return $this;
     }
 }

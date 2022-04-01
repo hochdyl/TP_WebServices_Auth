@@ -2,17 +2,17 @@
 
 namespace App\Controller;
 
+use App\Entity\Token;
 use App\Entity\User;
-use App\Repository\UserRepository;
+use DateTime;
+use Doctrine\ORM\EntityNotFoundException;
 use Exception;
-use App\Entity\Movie;
-use App\Repository\MovieRepository;
-use App\Service\EntityUpdaterService;
-use App\Repository\CategoryRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('api/')]
@@ -28,74 +28,101 @@ class ApiAccountController extends ApiAbstractController
     #[Route('account', name: 'api_add_account', methods: ['POST'])]
     public function addAccount(Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
     {
+        // If authenticated user is not admin.
+        try {
+            $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        } catch (AccessDeniedException $e) {
+            return $this->response(['message' => $e->getMessage()], 403);
+        }
+
+        // If request content is wrongly formatted.
         try {
             $account = $this->deserializeRequest($request, $this->resource);
         } catch (Exception $e) {
             return $this->response(['message' => $e->getMessage()], 400);
         }
 
-        // Validate entity.
+        // Create and replace user token.
+        $token = new Token();
+        $account->setToken($token);
+
+        // Validate the account.
         $errors = $validator->validate($account);
 
+        // If there are errors in validation.
         if (count($errors)) {
             return $this->response($errors, 422);
         }
 
         $em->persist($account);
+        $em->persist($token);
         $em->flush();
 
         return $this->response($account, 201);
     }
 
     #[Route('account/{uid}', name: 'api_get_account', methods: ['GET'])]
-    public function getAccount(int|string $uid, UserRepository $userRepository): Response
+    public function getAccount(int|string $uid): Response
     {
-        // TODO : L'UID "me" est un alias représentant l'utilisateur à qui appartient l'access token.
-        // TODO : Un utilisateur anonyme ne peut récupérer aucun compte.
-        // TODO : Un utilisateur connecté n'ayant pas le rôle ROLE_ADMIN ne peut récupérer que son compte (via son UID ou l'alias "me").
-        // TODO : Un utilisateur connecté ayant le rôle ROLE_ADMIN peut récupérer n'importe quel compte.
-
-        $account = $userRepository->find($uid);
-
-        if(!$account) {
-            return $this->response(['message' => 'The resource you requested could not be found.'], 404);
+        // Find account with id parameter or 'me' alias.
+        try {
+            $account = $this->getAccountByParameter($uid);
+        } catch (AccessDeniedException $e) {
+            return $this->response(['message' => $e->getMessage()], 401);
+        } catch (EntityNotFoundException $e) {
+            return $this->response(['message' => $e->getMessage()], 404);
         }
 
         return $this->response($account, 200);
     }
 
     #[Route('account/{uid}', name: 'api_update_account', methods: ['PUT'])]
-    public function updateAccount(int|string $uid, Request $request, UserRepository $userRepository,
-                                EntityManagerInterface $em, EntityUpdaterService $updater,
-                                ValidatorInterface $validator): Response
+    public function updateAccount(int|string $uid, Request $request, EntityManagerInterface $em,
+                                  ValidatorInterface $validator, UserPasswordHasherInterface $passwordHasher): Response
     {
-        // TODO : Permet l'édition d'un compte utilisateur.
-        // TODO : Seul un "ROLE_ADMIN" peut éditer les roles.
-        // TODO : Un "ROLE_ADMIN" peut promouvoir un "ROLE_USER" en "ROLE_ADMIN"
-        // TODO : Un compte ne disposant pas de "ROLE_ADMIN" ne peut éditer que son compte via sont UID ou l'alias "me"
-
-        $account = $userRepository->find($uid);
-
-        if (!$account) {
-            return $this->response(['message' => 'The resource you requested could not be found.'], 404);
+        // Find account with id parameter or 'me' alias.
+        try {
+            $account = $this->getAccountByParameter($uid);
+        } catch (AccessDeniedException $e) {
+            return $this->response(['message' => $e->getMessage()], 401);
+        } catch (EntityNotFoundException $e) {
+            return $this->response(['message' => $e->getMessage()], 404);
         }
 
+        // Get request content.
         $data = json_decode($request->getContent(), true);
 
+        // If content is empty or wrongly formatted.
         if (!$data) {
-            return $this->response(['message' => 'Data is empty or wrongly formatted in json.'], 400);
+            return $this->response(['message' => 'Request is empty or wrongly formatted in json.'], 400);
         }
 
-        // Update entity from request data.
+        // If request content contain password.
+        if (array_key_exists('password', $data)) {
+            $data['password'] = $passwordHasher->hashPassword($account, $data['password']);
+        }
+
+        // Verify if request content don't update forbidden attributes.
         try {
-            $account = $updater->update($account, $data);
+            $this->validateAccountPayload($data);
+        } catch (Exception $e) {
+            return $this->response(['message' => $e->getMessage()], 403);
+        }
+
+        // Update account.
+        try {
+            $account = $this->update($account, $data);
         } catch (Exception $e) {
             return $this->response(['message' => $e->getMessage()], 422);
         }
 
-        // Validate entity.
+        // Change 'updatedAt' datetime.
+        $account->setUpdatedAt(new DateTime());
+
+        // Validate the account.
         $errors = $validator->validate($account);
 
+        // If there are errors in validation.
         if (count($errors)) {
             return $this->response($errors, 422);
         }
@@ -104,14 +131,5 @@ class ApiAccountController extends ApiAbstractController
         $em->flush();
 
         return $this->response($account, 200);
-    }
-
-    #[Route('account/login', name: 'api_login_account', methods: ['GET'])]
-    public function login(Request $request): Response
-    {
-        // TODO : Verifier les identifiants
-        // TODO : Renvoyer un bearer token si c'est bon
-
-        return $this->response(['key' => 'value'], 200);
     }
 }
