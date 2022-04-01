@@ -2,13 +2,11 @@
 
 namespace App\Controller;
 
+use App\Entity\Token;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Exception;
-use App\Entity\Movie;
-use App\Repository\MovieRepository;
 use App\Service\EntityUpdaterService;
-use App\Repository\CategoryRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,17 +25,14 @@ class ApiAccountController extends ApiAbstractController
     private string $resource = User::class;
 
     #[Route('account', name: 'api_add_account', methods: ['POST'])]
-    public function addAccount($credentials, Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
+    public function addAccount(Request $request, EntityManagerInterface $em, ValidatorInterface $validator): Response
     {
-        dd($credentials);
-
         try {
-            $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
+            $this->denyAccessUnlessGranted('ROLE_ADMIN');
         } catch (AccessDeniedException $e) {
             return $this->response(['message' => $e->getMessage()], 401);
         }
 
-        dd('WORKING');
         try {
             $account = $this->deserializeRequest($request, $this->resource);
         } catch (Exception $e) {
@@ -51,19 +46,31 @@ class ApiAccountController extends ApiAbstractController
             return $this->response($errors, 422);
         }
 
+        $token = new Token($account);
         $em->persist($account);
+        $em->persist($token);
         $em->flush();
 
         return $this->response($account, 201);
     }
 
     #[Route('account/{uid}', name: 'api_get_account', methods: ['GET'])]
-    public function getAccount(int|string $uid, UserRepository $userRepository): Response
+    public function getAccount(int|string $uid, Request $request, UserRepository $userRepository): Response
     {
         // TODO : L'UID "me" est un alias représentant l'utilisateur à qui appartient l'access token.
         // TODO : Un utilisateur anonyme ne peut récupérer aucun compte.
         // TODO : Un utilisateur connecté n'ayant pas le rôle ROLE_ADMIN ne peut récupérer que son compte (via son UID ou l'alias "me").
         // TODO : Un utilisateur connecté ayant le rôle ROLE_ADMIN peut récupérer n'importe quel compte.
+
+        // Differencis un id et un "me" sur les parametres de la route
+        $test = $request->attributes->get('_route_params');
+dd($test);
+
+        try {
+            $this->denyAccessUnlessGranted('ROLE_USER');
+        } catch (AccessDeniedException $e) {
+            return $this->response(['message' => $e->getMessage()], 401);
+        }
 
         $account = $userRepository->find($uid);
 

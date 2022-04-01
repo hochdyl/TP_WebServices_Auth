@@ -4,7 +4,6 @@ namespace App\Controller;
 
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Serializer\Exception\NotEncodableValueException;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -18,23 +17,9 @@ abstract class ApiAbstractController extends AbstractController
      */
     protected SerializerInterface $serializer;
 
-    /**
-     * Handle input and output in supported formats.
-     *
-     * @param RequestStack $request
-     * @param SerializerInterface $serializer
-     */
-    public function __construct(RequestStack $request, SerializerInterface $serializer)
+    public function __construct(SerializerInterface $serializer)
     {
         $this->serializer = $serializer;
-
-        $request = $request->getCurrentRequest();
-
-        $apiToken = $request->headers->get('Authorization');
-        if ($apiToken === null) {
-            return new Response('test', 401, ['Content-Type' => 'application/json']);
-            $this->response(['message' => 'No API token provided.'], 401);
-        }
     }
 
     /**
@@ -64,7 +49,7 @@ abstract class ApiAbstractController extends AbstractController
     {
         try {
             $data = $this->serializer->deserialize($request->getContent(), $resource, 'json');
-        } catch (NotEncodableValueException $e) {
+        } catch (NotEncodableValueException) {
             return throw new Exception('Data is wrongly formatted in json.');
         }
 

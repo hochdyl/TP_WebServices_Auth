@@ -3,8 +3,10 @@
 namespace App\Entity;
 
 use App\Repository\TokenRepository;
+use DateTime;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Exception;
 
 #[ORM\Entity(repositoryClass: TokenRepository::class)]
 class Token
@@ -17,13 +19,13 @@ class Token
     #[ORM\Column(type: 'string', length: 255)]
     private $accessToken;
 
-    #[ORM\Column(type: 'datetime_immutable')]
+    #[ORM\Column(type: 'datetime')]
     private $accessTokenExpiresAt;
 
     #[ORM\Column(type: 'string', length: 255)]
     private $refreshToken;
 
-    #[ORM\Column(type: 'datetime_immutable')]
+    #[ORM\Column(type: 'datetime')]
     private $refreshTokenExpiresAt;
 
     #[ORM\ManyToOne(targetEntity: User::class, inversedBy: 'tokens')]
@@ -49,7 +51,7 @@ class Token
         return $this->accessToken;
     }
 
-    public function getAccessTokenExpiresAt(): ?DateTimeImmutable
+    public function getAccessTokenExpiresAt(): DateTime
     {
         return $this->accessTokenExpiresAt;
     }
@@ -59,7 +61,7 @@ class Token
         return $this->refreshToken;
     }
 
-    public function getRefreshTokenExpiresAt(): ?DateTimeImmutable
+    public function getRefreshTokenExpiresAt(): DateTime
     {
         return $this->refreshTokenExpiresAt;
     }

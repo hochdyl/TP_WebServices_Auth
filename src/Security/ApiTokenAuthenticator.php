@@ -2,6 +2,7 @@
 
 namespace App\Security;
 
+use App\Entity\Token;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -12,12 +13,11 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Http\Authenticator\AbstractAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
-use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 
 class ApiTokenAuthenticator extends AbstractAuthenticator
 {
-    private $em;
+    private EntityManagerInterface $em;
 
     public function __construct(EntityManagerInterface $em)
     {
@@ -26,31 +26,44 @@ class ApiTokenAuthenticator extends AbstractAuthenticator
 
     public function supports(Request $request): ?bool
     {
-        return str_starts_with($request->headers->get('Authorization'), 'Bearer ');
+        if (str_starts_with($request->headers->get('Authorization'), 'Bearer ')) {
+            return true;
+        }
+
+        return false;
     }
 
     public function authenticate(Request $request): SelfValidatingPassport
     {
         $apiToken = $request->headers->get('Authorization');
 
-        $userRepository = $this->em->getRepository(User::class);
-        $token->findBy['token' => ]
-        if (null === $apiToken) {
+        if (!$apiToken) {
             throw new CustomUserMessageAuthenticationException('No API token provided.');
         }
 
         // Skip beyond "Bearer "
         $apiToken = substr($apiToken, strlen('Bearer '));
 
-        return new SelfValidatingPassport(new UserBadge(
-            $apiToken,
-            fn () => // new User(...) Charger l'user de Symfony.
+        $tokenRepository = $this->em->getRepository(Token::class);
+        $token = $tokenRepository->findOneBy(['accessToken' => $apiToken]);
+
+        if (!$token) {
+            throw new CustomUserMessageAuthenticationException('Unknown authorization token.');
+        }
+
+        $userRepository = $this->em->getRepository(User::class);
+        $user = $userRepository->find($token->getUser());
+
+        return new SelfValidatingPassport(
+            new UserBadge(
+                $apiToken,
+                fn () => $user
         ));
     }
 
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
     {
-        dd('onAuthenticationSuccess');
+        return null;
     }
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?JsonResponse
