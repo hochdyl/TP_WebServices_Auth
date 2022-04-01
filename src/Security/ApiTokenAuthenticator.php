@@ -26,11 +26,7 @@ class ApiTokenAuthenticator extends AbstractAuthenticator
 
     public function supports(Request $request): ?bool
     {
-        if (str_starts_with($request->headers->get('Authorization'), 'Bearer ')) {
-            return true;
-        }
-
-        return false;
+        return str_starts_with($request->headers->get('Authorization'), 'Bearer ');
     }
 
     public function authenticate(Request $request): SelfValidatingPassport
@@ -51,8 +47,7 @@ class ApiTokenAuthenticator extends AbstractAuthenticator
             throw new CustomUserMessageAuthenticationException('Unknown authorization token.');
         }
 
-        $userRepository = $this->em->getRepository(User::class);
-        $user = $userRepository->find($token->getUser());
+        $user = $token->getUser();
 
         return new SelfValidatingPassport(
             new UserBadge(

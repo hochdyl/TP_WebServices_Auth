@@ -7,6 +7,7 @@ use DateTime;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Exception;
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: TokenRepository::class)]
 class Token
@@ -14,31 +15,34 @@ class Token
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
+    #[Groups(['public'])]
     private $id;
 
     #[ORM\Column(type: 'string', length: 255)]
+    #[Groups(['public'])]
     private $accessToken;
 
     #[ORM\Column(type: 'datetime')]
+    #[Groups(['public'])]
     private $accessTokenExpiresAt;
 
     #[ORM\Column(type: 'string', length: 255)]
+    #[Groups(['public'])]
     private $refreshToken;
 
     #[ORM\Column(type: 'datetime')]
+    #[Groups(['public'])]
     private $refreshTokenExpiresAt;
 
-    #[ORM\ManyToOne(targetEntity: User::class, inversedBy: 'tokens')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\OneToOne(mappedBy: 'token', targetEntity: User::class, cascade: ['persist', 'remove'])]
     private $user;
 
-    public function __construct(User $user)
+    public function __construct()
     {
-        $this->user = $user;
         $this->accessToken = bin2hex(random_bytes(64));
-        $this->accessTokenExpiresAt = new \DateTime('+1 hour');
+        $this->accessTokenExpiresAt = new DateTime('+60 minutes');
         $this->refreshToken = bin2hex(random_bytes(64));
-        $this->refreshTokenExpiresAt = new \DateTime('+2 hours');
+        $this->refreshTokenExpiresAt = new DateTime('+120 minutes');
     }
 
     public function getId(): ?int
@@ -56,6 +60,15 @@ class Token
         return $this->accessTokenExpiresAt;
     }
 
+    public function isAccessTokenExpired(): bool
+    {
+        $now = new DateTime();
+        $baseTimestamp = strtotime($now->format('Y-m-d H:i:s'));
+        $expireTimestamp = strtotime($this->getAccessTokenExpiresAt()->format('Y-m-d H:i:s'));
+        $lifetimeTimestamp = $expireTimestamp - $baseTimestamp;
+        return $lifetimeTimestamp < 0;
+    }
+
     public function getRefreshToken(): ?string
     {
         return $this->refreshToken;
@@ -66,11 +79,13 @@ class Token
         return $this->refreshTokenExpiresAt;
     }
 
-    public function setRefreshTokenExpiresAt(DateTimeImmutable $refreshTokenExpiresAt): self
+    public function isRefreshTokenExpired(): bool
     {
-        $this->refreshTokenExpiresAt = $refreshTokenExpiresAt;
-
-        return $this;
+        $now = new DateTime();
+        $baseTimestamp = strtotime($now->format('Y-m-d H:i:s'));
+        $expireTimestamp = strtotime($this->getRefreshTokenExpiresAt()->format('Y-m-d H:i:s'));
+        $lifetimeTimestamp = $expireTimestamp - $baseTimestamp;
+        return $lifetimeTimestamp < 0 || $this->getUser() === null;
     }
 
     public function getUser(): ?User
@@ -78,8 +93,13 @@ class Token
         return $this->user;
     }
 
-    public function setUser(?User $user): self
+    public function setUser(User $user): self
     {
+        // set the owning side of the relation if necessary
+        if ($user->getToken() !== $this) {
+            $user->setToken($this);
+        }
+
         $this->user = $user;
 
         return $this;

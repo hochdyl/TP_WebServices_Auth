@@ -22,7 +22,8 @@ class AccountFixtures extends Fixture
             $user->setLogin('user'.$i);
             $user->setPassword('pass'.$i);
 
-            $token = new Token($user);
+            $token = new Token();
+            $user->setToken($token);
 
             $manager->persist($token);
             $manager->persist($user);
@@ -34,7 +35,13 @@ class AccountFixtures extends Fixture
         $user->setPassword('pass');
         $user->setRoles(['ROLE_ADMIN']);
 
-        $token = new Token($user);
+        $token = new Token();
+        $user->setToken($token);
+
+        $manager->persist($token);
+        $manager->persist($user);
+
+        $manager->flush();
 
         echo "\n";
         echo "================= ADMIN CREDENTIALS =================\n";
@@ -48,10 +55,5 @@ class AccountFixtures extends Fixture
         echo "\033[36m".$token->getRefreshToken()."\033[0m\n";
         echo "================= ENJOY TESTING =================\n";
         echo "\n";
-
-        $manager->persist($token);
-        $manager->persist($user);
-
-        $manager->flush();
     }
 }

@@ -36,10 +36,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Assert\NotBlank(message: 'Login cannot be empty.')]
     private $password;
 
-    #[ORM\OneToMany(mappedBy: 'user', targetEntity: Token::class, orphanRemoval: true)]
-    #[Assert\NotNull(message: 'A token is required.')]
-    private $tokens;
-
     #[ORM\Column(type: 'string', length: 255)]
     #[Assert\Choice(choices: ['open', 'close'], message: 'Choose a valid status.')]
     #[Assert\NotNull(message: 'A status is required.')]
@@ -55,9 +51,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['public'])]
     private $updatedAt;
 
+    #[ORM\OneToOne(inversedBy: 'user', targetEntity: Token::class, cascade: ['persist', 'remove'])]
+    #[ORM\JoinColumn(nullable: false)]
+    #[Assert\NotNull(message: 'A token is required.')]
+    private $token;
+
     public function __construct()
     {
-        $this->tokens = new ArrayCollection();
         $this->roles = ['ROLE_USER'];
         $this->status = "open";
         $this->createdAt = new DateTime();
@@ -134,36 +134,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         // $this->plainPassword = null;
     }
 
-    /**
-     * @return Collection<int, Token>
-     */
-    public function getTokens(): Collection
-    {
-        return $this->tokens;
-    }
-
-    public function addToken(Token $token): self
-    {
-        if (!$this->tokens->contains($token)) {
-            $this->tokens[] = $token;
-            $token->setUser($this);
-        }
-
-        return $this;
-    }
-
-    public function removeToken(Token $token): self
-    {
-        if ($this->tokens->removeElement($token)) {
-            // set the owning side to null (unless already changed)
-            if ($token->getUser() === $this) {
-                $token->setUser(null);
-            }
-        }
-
-        return $this;
-    }
-
     public function getStatus(): ?string
     {
         return $this->status;
@@ -189,6 +159,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setUpdatedAt(DateTime $updatedAt): self
     {
         $this->updatedAt = $updatedAt;
+
+        return $this;
+    }
+
+    public function getToken(): ?Token
+    {
+        return $this->token;
+    }
+
+    public function setToken(Token $token): self
+    {
+        $this->token = $token;
 
         return $this;
     }
